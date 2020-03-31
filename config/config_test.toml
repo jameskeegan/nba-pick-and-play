@@ -1,0 +1,9 @@
+[profile]
+    flag="test-local"
+[mongo]
+    hostUri="mongodb://localhost:27017"
+    name="nbaPickAndPlayTest"
+[rapid]
+    enabled=false
+    baseUrl="http://localhost:8081/games/date/"
+    apiKey="nope"

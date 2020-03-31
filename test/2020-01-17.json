@@ -1,0 +1,207 @@
+{
+    "api": {
+        "status": 200,
+        "message": "GET games/date/2020-01-17",
+        "results": 5,
+        "filters": [
+            "seasonYear",
+            "league",
+            "gameId",
+            "teamId",
+            "date",
+            "live"
+        ],
+        "games": [
+            {
+                "seasonYear": "2019",
+                "league": "standard",
+                "gameId": "7003",
+                "startTimeUTC": "2020-01-17T00:30:00.000Z",
+                "endTimeUTC": "2020-01-17T02:50:00.000Z",
+                "arena": "Madison Square Garden",
+                "city": "New York",
+                "country": "USA",
+                "clock": "",
+                "gameDuration": "2:08",
+                "currentPeriod": "4/4",
+                "halftime": "0",
+                "EndOfPeriod": "0",
+                "seasonStage": "2",
+                "statusShortGame": "3",
+                "statusGame": "Finished",
+                "vTeam": {
+                    "teamId": "28",
+                    "shortName": "PHX",
+                    "fullName": "Phoenix Suns",
+                    "nickName": "Suns",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/5/56/Phoenix_Suns_2013.png",
+                    "score": {
+                        "points": "121"
+                    }
+                },
+                "hTeam": {
+                    "teamId": "24",
+                    "shortName": "NYK",
+                    "fullName": "New York Knicks",
+                    "nickName": "Knicks",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/d/dc/NY_Knicks_Logo_2011.png",
+                    "score": {
+                        "points": "98"
+                    }
+                }
+            },
+            {
+                "seasonYear": "2019",
+                "league": "standard",
+                "gameId": "7004",
+                "startTimeUTC": "2020-01-17T01:00:00.000Z",
+                "endTimeUTC": "2020-01-17T03:40:00.000Z",
+                "arena": "Fiserv Forum",
+                "city": "Milwaukee",
+                "country": "USA",
+                "clock": "",
+                "gameDuration": "2:24",
+                "currentPeriod": "4/4",
+                "halftime": "0",
+                "EndOfPeriod": "0",
+                "seasonStage": "2",
+                "statusShortGame": "3",
+                "statusGame": "Finished",
+                "vTeam": {
+                    "teamId": "2",
+                    "shortName": "BOS",
+                    "fullName": "Boston Celtics",
+                    "nickName": "Celtics",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/thumb/6/65/Celtics_de_Boston_logo.svg/1024px-Celtics_de_Boston_logo.svg.png",
+                    "score": {
+                        "points": "123"
+                    }
+                },
+                "hTeam": {
+                    "teamId": "21",
+                    "shortName": "MIL",
+                    "fullName": "Milwaukee Bucks",
+                    "nickName": "Bucks",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/3/34/Bucks2015.png",
+                    "score": {
+                        "points": "128"
+                    }
+                }
+            },
+            {
+                "seasonYear": "2019",
+                "league": "standard",
+                "gameId": "7005",
+                "startTimeUTC": "2020-01-17T01:00:00.000Z",
+                "endTimeUTC": "2020-01-17T03:58:00.000Z",
+                "arena": "Smoothie King Center",
+                "city": "New Orleans",
+                "country": "USA",
+                "clock": "",
+                "gameDuration": "2:47",
+                "currentPeriod": "5/4",
+                "halftime": "0",
+                "EndOfPeriod": "0",
+                "seasonStage": "2",
+                "statusShortGame": "3",
+                "statusGame": "Finished",
+                "vTeam": {
+                    "teamId": "40",
+                    "shortName": "UTA",
+                    "fullName": "Utah Jazz",
+                    "nickName": "Jazz",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/3/3b/Jazz_de_l%27Utah_logo.png",
+                    "score": {
+                        "points": "132"
+                    }
+                },
+                "hTeam": {
+                    "teamId": "23",
+                    "shortName": "NOP",
+                    "fullName": "New Orleans Pelicans",
+                    "nickName": "Pelicans",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/thumb/2/21/New_Orleans_Pelicans.png/200px-New_Orleans_Pelicans.png",
+                    "score": {
+                        "points": "138"
+                    }
+                }
+            },
+            {
+                "seasonYear": "2019",
+                "league": "standard",
+                "gameId": "7006",
+                "startTimeUTC": "2020-01-17T03:30:00.000Z",
+                "endTimeUTC": "2020-01-17T06:30:00.000Z",
+                "arena": "Chase Center",
+                "city": "San Francisco",
+                "country": "USA",
+                "clock": "",
+                "gameDuration": "2:46",
+                "currentPeriod": "5/4",
+                "halftime": "0",
+                "EndOfPeriod": "0",
+                "seasonStage": "2",
+                "statusShortGame": "3",
+                "statusGame": "Finished",
+                "vTeam": {
+                    "teamId": "9",
+                    "shortName": "DEN",
+                    "fullName": "Denver Nuggets",
+                    "nickName": "Nuggets",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/thumb/3/35/Nuggets_de_Denver_2018.png/180px-Nuggets_de_Denver_2018.png",
+                    "score": {
+                        "points": "134"
+                    }
+                },
+                "hTeam": {
+                    "teamId": "11",
+                    "shortName": "GSW",
+                    "fullName": "Golden State Warriors",
+                    "nickName": "Warriors",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/thumb/d/de/Warriors_de_Golden_State_logo.svg/1200px-Warriors_de_Golden_State_logo.svg.png",
+                    "score": {
+                        "points": "131"
+                    }
+                }
+            },
+            {
+                "seasonYear": "2019",
+                "league": "standard",
+                "gameId": "7007",
+                "startTimeUTC": "2020-01-17T03:30:00.000Z",
+                "endTimeUTC": "2020-01-17T05:43:00.000Z",
+                "arena": "Staples Center",
+                "city": "Los Angeles",
+                "country": "USA",
+                "clock": "",
+                "gameDuration": "2:01",
+                "currentPeriod": "4/4",
+                "halftime": "0",
+                "EndOfPeriod": "0",
+                "seasonStage": "2",
+                "statusShortGame": "3",
+                "statusGame": "Finished",
+                "vTeam": {
+                    "teamId": "26",
+                    "shortName": "ORL",
+                    "fullName": "Orlando Magic",
+                    "nickName": "Magic",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/b/bd/Orlando_Magic_logo_2010.png",
+                    "score": {
+                        "points": "95"
+                    }
+                },
+                "hTeam": {
+                    "teamId": "16",
+                    "shortName": "LAC",
+                    "fullName": "LA Clippers",
+                    "nickName": "Clippers",
+                    "logo": "https://upload.wikimedia.org/wikipedia/fr/d/d6/Los_Angeles_Clippers_logo_2010.png",
+                    "score": {
+                        "points": "122"
+                    }
+                }
+            }
+        ]
+    }
+}
