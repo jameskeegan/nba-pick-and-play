@@ -14,10 +14,14 @@ type (
 		getMatchesByDateRequest(date string) (*rapidResponse, error)
 	}
 
-	rapidAPI struct{}
+	baseRapidAPIClient struct{}
 )
 
-func (rapidAPI) getMatchesByDateRequest(date string) (*rapidResponse, error) {
+var (
+	rapidAPIClient rapidAPIInterface
+)
+
+func (baseRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
 	client := http.Client{}
 	req, err := http.NewRequest("GET", config.Config.Rapid.BaseURL+date, nil)
 
@@ -93,12 +97,7 @@ const (
 	statusFinished = "Finished"
 )
 
-var (
-	rapidAPIObject rapidAPIInterface
-)
-
 func gameToMatch(game rapidGame) (*match, error) {
-	// fmt.Printf("%+v\n", game)
 	matchID, err := strconv.ParseInt(game.GameID, 10, 64)
 
 	if err != nil {
@@ -140,10 +139,10 @@ func gameToMatch(game rapidGame) (*match, error) {
 	// work out the game date id
 	if isPreviousDayGame(game.StartTimeUTC) {
 		// game date id is for the previous day (e.g. game took place at 3am UTC - 8pm PST)
-		match.GameDateID = game.StartTimeUTC.Add(-24 * time.Hour).Format(rapidBasicDataFormat)
+		match.GameDateID = game.StartTimeUTC.Add(-24 * time.Hour).Format(basicDateFormat)
 	} else {
 		// game took place on the date specified
-		match.GameDateID = game.StartTimeUTC.Format(rapidBasicDataFormat)
+		match.GameDateID = game.StartTimeUTC.Format(basicDateFormat)
 	}
 
 	return match, nil

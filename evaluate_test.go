@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
-	"nba-pick-and-play/config"
 	"testing"
 	"time"
 
@@ -13,10 +12,10 @@ import (
 )
 
 type (
-	rapidAPIMock struct{}
+	mockRapidAPIClient struct{}
 )
 
-func (rapidAPIMock) getMatchesByDateRequest(date string) (*rapidResponse, error) {
+func (mockRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
 	path := "test/" + date + ".json"
 	file, err := ioutil.ReadFile(path)
 
@@ -34,19 +33,10 @@ func (rapidAPIMock) getMatchesByDateRequest(date string) (*rapidResponse, error)
 	return &response, nil
 }
 
-func init() {
-	config.LoadConfig("config/config_test.toml")
-
-	setupDatabase()
-
-	// mock API to return the json test files data as responses
-	rapidAPIObject = rapidAPIMock{}
-}
-
 func TestEvaluate(t *testing.T) {
 	defer cleanDatabase(t)
 
-	date := time.Date(2020, time.January, 18, 9, 0, 0, 0, time.UTC) // 9am, Jan 17th 2020
+	date := time.Date(2020, time.January, 18, 9, 0, 0, 0, time.UTC) // 9am, Jan 18th 2020
 	err := evaluateMatches(date)
 
 	if err != nil {

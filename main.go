@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// interface for the Rapid API requests
-	rapidAPIObject = rapidAPI{}
+	rapidAPIClient = baseRapidAPIClient{}
 
 	validate = validator.New()
 
@@ -43,6 +43,9 @@ func main() {
 }
 
 func initRouter(router *mux.Router) {
+	userRouter := router.PathPrefix("/v1/user").Subrouter()
+	userRouter.HandleFunc("/matches", getMatchesByDate).Methods("GET")
+
 	adminRouter := router.PathPrefix("/v1/admin").Subrouter()
-	adminRouter.HandleFunc("/resync", forceEvaluation).Methods("POST")
+	adminRouter.HandleFunc("/evaluate", forceEvaluation).Methods("POST")
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"nba-pick-and-play/response"
 	"net/http"
 	"time"
@@ -19,7 +18,7 @@ func forceEvaluation(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&payload)
 
 	if err != nil {
-		response.ReturnBadRequest(w, fmt.Errorf("Could not decode JSON payload"))
+		response.ReturnBadRequest(w, nil, "Could not decode JSON payload")
 		return
 	}
 
@@ -28,14 +27,14 @@ func forceEvaluation(w http.ResponseWriter, r *http.Request) {
 	err = validate.Struct(payload)
 
 	if err != nil {
-		response.ReturnBadRequest(w, err.Error())
+		response.ReturnBadRequest(w, nil, err.Error())
 		return
 	}
 
 	err = evaluateMatches(payload.Date)
 
 	if err != nil {
-		response.ReturnBadRequest(w, err.Error())
+		response.ReturnBadRequest(w, nil, err.Error())
 		return
 	}
 

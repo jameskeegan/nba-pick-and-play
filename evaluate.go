@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	rapidBasicDataFormat = "2006-01-02"
+	basicDateFormat = "2006-01-02"
 )
 
 func evaluateMatches(evaluationDate time.Time) error {
-	log.Println("Evaluating...")
+	log.Printf("Evaluating matches for date %v...", evaluationDate)
 
 	// evaluate yesterday's matches
-	date := evaluationDate.Add(-24 * time.Hour).Format(rapidBasicDataFormat)
+	date := evaluationDate.Add(-24 * time.Hour).Format(basicDateFormat)
 	err := evaluateMatchDay(date)
 
 	if err != nil {
@@ -22,7 +22,7 @@ func evaluateMatches(evaluationDate time.Time) error {
 	}
 
 	// evaluate today's matches
-	date = evaluationDate.Format(rapidBasicDataFormat)
+	date = evaluationDate.Format(basicDateFormat)
 	err = evaluateMatchDay(date)
 
 	if err != nil {
@@ -31,7 +31,7 @@ func evaluateMatches(evaluationDate time.Time) error {
 	}
 
 	// evaluate tomorrow's matches
-	date = evaluationDate.Add(24 * time.Hour).Format(rapidBasicDataFormat)
+	date = evaluationDate.Add(24 * time.Hour).Format(basicDateFormat)
 	err = evaluateMatchDay(date)
 
 	if err != nil {
@@ -39,12 +39,12 @@ func evaluateMatches(evaluationDate time.Time) error {
 		return err
 	}
 
-	log.Println("Evaluation complete")
+	log.Println("Evaluation successful")
 	return nil
 }
 
 func evaluateMatchDay(date string) error {
-	res, err := rapidAPIObject.getMatchesByDateRequest(date)
+	res, err := rapidAPIClient.getMatchesByDateRequest(date)
 
 	if err != nil {
 		log.Printf("ERROR: Could not evaluate matches: %s", err.Error())

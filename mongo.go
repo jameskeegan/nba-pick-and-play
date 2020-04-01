@@ -14,7 +14,7 @@ import (
 
 type (
 	match struct {
-		ID          int64     `bson:"_id" json:"-"`
+		ID          int64     `bson:"_id" json:"id"`
 		SeasonID    string    `bson:"seasonId" json:"seasonId"`
 		Status      string    `bson:"status" json:"status"`
 		GameDateID  string    `bson:"gameDateId" json:"gameDateId"` // simple "YYYY-MM-DD" to determine the game's actual date (UTC != PST)
@@ -89,6 +89,32 @@ func createIndexes() error {
 	)
 
 	return err
+}
+
+func findMatchesByGameDateID(gameDateID string) ([]match, error) {
+	db := getDatabase()
+
+	filter := bson.D{
+		{"gameDateId", gameDateID},
+	}
+
+	options := options.FindOptions{}
+	options.SetSort(bson.D{{"startDateUTC", 1}})
+
+	cur, err := db.Collection(matchesCollection).Find(
+		context.Background(),
+		filter,
+		&options,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []match
+	err = cur.All(context.Background(), &matches)
+
+	return matches, err
 }
 
 func insertMatch(match match) error {
