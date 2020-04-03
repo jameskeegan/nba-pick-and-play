@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx"
 )
 
 type (
-	match struct {
+	game struct {
 		ID          int64     `bson:"_id" json:"id"`
 		SeasonID    string    `bson:"seasonId" json:"seasonId"`
 		Status      string    `bson:"status" json:"status"`
-		GameDateID  string    `bson:"gameDateId" json:"gameDateId"` // simple "YYYY-MM-DD" to determine the game's actual date (UTC != PST)
+		GameDayID   string    `bson:"gameDayId" json:"gameDayId"` // simple "YYYY-MM-DD" to determine the game's actual date (UTC != PST)
 		SeasonStage string    `bson:"seasonStage" json:"seasonStage"`
 		StartDate   time.Time `bson:"startDate" json:"startDate"` // UTC
 		WinnerID    int64     `bson:"winnerId" json:"winnerId"`   // id of the winning team
@@ -39,11 +40,42 @@ type (
 		City    string `bson:"city" json:"city"`
 		Country string `bson:"country" json:"country"`
 	}
+
+	gameDayReport struct {
+		ID        string               `bson:"_id" json:"id"`
+		Games     map[int64]gameReport `bson:"games" json:"games"`
+		Deadline  time.Time            `bson:"deadline" json:"deadline"`
+		Evaluated bool                 `bson:"evaluated" json:"evaluated"`
+	}
+
+	gameReport struct {
+		HomeTeam team      `bson:"homeTeam" json:"homeTeam"`
+		AwayTeam team      `bson:"awayTeam" json:"awayTeam"`
+		Venue    venue     `bson:"venue" json:"venue"`
+		Date     time.Time `bson:"date" json:"date"`
+		WinnerID int64     `bson:"winnerId" json:"winnerId,omitempty"`
+	}
+
+	gameDayPicks struct {
+		ID        primitive.ObjectID `bson:"_id" json:"id"`
+		UserID    int64              `bson:"userId" json:"userId"`
+		GameDayID string             `bson:"gameDayId" json:"gameDayId"`
+		Picks     map[int64]pick     `bson:"picks" json:"picks"`
+		Evaluated bool               `bson:"evaluated" json:"evaluated"`
+		Score     int64              `bson:"score" json:"score"`
+		Date      time.Time          `bson:"date" json:"date"`
+	}
+
+	pick struct {
+		SelectionID int64  `bson:"selectionId" json:"selectionId"`
+		Status      string `bson:"status" json:"status"`
+	}
 )
 
 const (
-	matchesCollection = "matches"
-	picksCollection   = "picks"
+	gameDaysCollection = "gameDays"
+	gamesCollection    = "games"
+	picksCollection    = "picks"
 )
 
 var (
@@ -78,30 +110,30 @@ func setupDatabase() {
 func createIndexes() error {
 	db := getDatabase()
 
-	_, err := db.Collection(matchesCollection).Indexes().CreateOne(
+	_, err := db.Collection(gamesCollection).Indexes().CreateOne(
 		context.Background(),
 		mongo.IndexModel{
 			Keys: bsonx.Doc{
-				{"gameDateId", bsonx.Int32(1)},
+				{"gameDayId", bsonx.Int32(1)},
 			},
-			Options: options.Index().SetName("gameDateIdIndex").SetBackground(true),
+			Options: options.Index().SetName("gameDayIdIndex").SetBackground(true),
 		},
 	)
 
 	return err
 }
 
-func findMatchesByGameDateID(gameDateID string) ([]match, error) {
+func findMatchesByGameDateID(gameDateID string) ([]game, error) {
 	db := getDatabase()
 
 	filter := bson.D{
-		{"gameDateId", gameDateID},
+		{"gameDayId", gameDateID},
 	}
 
 	options := options.FindOptions{}
 	options.SetSort(bson.D{{"startDateUTC", 1}})
 
-	cur, err := db.Collection(matchesCollection).Find(
+	cur, err := db.Collection(gamesCollection).Find(
 		context.Background(),
 		filter,
 		&options,
@@ -111,24 +143,102 @@ func findMatchesByGameDateID(gameDateID string) ([]match, error) {
 		return nil, err
 	}
 
-	var matches []match
-	err = cur.All(context.Background(), &matches)
+	var games []game
+	err = cur.All(context.Background(), &games)
 
-	return matches, err
+	return games, err
 }
 
-func insertMatch(match match) error {
+func findGameDayReportByID(id string) (*gameDayReport, error) {
+	db := getDatabase()
+
+	var report gameDayReport
+	err := db.Collection(gameDaysCollection).FindOne(
+		context.Background(),
+		bson.D{
+			{"_id", id},
+		},
+	).Decode(&report)
+
+	return &report, err
+}
+
+func findPickReportsByGameDayID(date string) ([]gameDayPicks, error) {
+	db := getDatabase()
+
+	cur, err := db.Collection(picksCollection).Find(
+		context.Background(),
+		bson.D{
+			{"gameDayId", date},
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var picks []gameDayPicks
+	err = cur.All(context.Background(), &picks)
+
+	return picks, err
+}
+
+func upsertMatch(game game) error {
 	db := getDatabase()
 
 	options := options.ReplaceOptions{}
 	options.SetUpsert(true)
 
-	_, err := db.Collection(matchesCollection).ReplaceOne(
+	_, err := db.Collection(gamesCollection).ReplaceOne(
 		context.Background(),
 		bson.D{
-			{"_id", match.ID},
+			{"_id", game.ID},
 		},
-		match,
+		game,
+		&options,
+	)
+
+	return err
+}
+
+func upsertGameDayPicks(picks gameDayPicks) error {
+	db := getDatabase()
+
+	options := options.UpdateOptions{}
+	options.SetUpsert(true)
+
+	_, err := db.Collection(picksCollection).UpdateOne(
+		context.Background(),
+		bson.D{
+			{"userId", picks.UserID},
+			{"gameDayId", picks.GameDayID},
+		},
+		bson.D{
+			{"$set", bson.D{
+				{"picks", picks.Picks},
+				{"evaluated", picks.Evaluated},
+				{"score", picks.Score},
+				{"date", picks.Date},
+			}},
+		},
+		&options,
+	)
+
+	return err
+}
+
+func upsertGameDayReport(report gameDayReport) error {
+	db := getDatabase()
+
+	options := options.ReplaceOptions{}
+	options.SetUpsert(true)
+
+	_, err := db.Collection(gameDaysCollection).ReplaceOne(
+		context.Background(),
+		bson.D{
+			{"_id", report.ID},
+		},
+		report,
 		&options,
 	)
 

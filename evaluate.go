@@ -1,71 +1,87 @@
 package main
 
 import (
-	"log"
-	"time"
+	"errors"
+	"fmt"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const (
 	basicDateFormat = "2006-01-02"
 )
 
-func evaluateMatches(evaluationDate time.Time) error {
-	log.Printf("Evaluating matches for date %v...", evaluationDate)
-
-	// evaluate yesterday's matches
-	date := evaluationDate.Add(-24 * time.Hour).Format(basicDateFormat)
-	err := evaluateMatchDay(date)
+// for a given game day, get the correct picks and evaluate every pick
+func evaluateGameDayReport(date string) error {
+	report, err := findGameDayReportByID(date)
 
 	if err != nil {
-		log.Printf("ERROR: Could not evaluate matches for %s: %s", date, err.Error())
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			// one doesn't exist for whatever reason, so make one
+			err = createGameDayReport(date)
+
+			if err != nil {
+				return err
+			}
+		}
+
 		return err
 	}
 
-	// evaluate today's matches
-	date = evaluationDate.Format(basicDateFormat)
-	err = evaluateMatchDay(date)
+	games, err := findMatchesByGameDateID(date)
 
 	if err != nil {
-		log.Printf("ERROR: Could not evaluate matches for %s: %s", date, err.Error())
 		return err
 	}
 
-	// evaluate tomorrow's matches
-	date = evaluationDate.Add(24 * time.Hour).Format(basicDateFormat)
-	err = evaluateMatchDay(date)
+	for _, game := range games {
+		gameReport := report.Games[game.ID]
+		gameReport.HomeTeam.Score = game.HomeTeam.Score
+		gameReport.AwayTeam.Score = game.AwayTeam.Score
+		gameReport.WinnerID = determineWinner(game.HomeTeam, game.AwayTeam)
 
-	if err != nil {
-		log.Printf("ERROR: Could not evaluate matches for %s: %s", date, err.Error())
+		report.Games[game.ID] = gameReport
+	}
+
+	report.Evaluated = true
+
+	if err := upsertGameDayReport(*report); err != nil {
 		return err
 	}
 
-	log.Println("Evaluation successful")
-	return nil
+	return evaluatePicks(*report, date)
 }
 
-func evaluateMatchDay(date string) error {
-	res, err := rapidAPIClient.getMatchesByDateRequest(date)
+func createGameDayReport(date string) error {
+	// get all matches for this game day, sorted with earliest first
+	matches, err := findMatchesByGameDateID(date)
 
 	if err != nil {
-		log.Printf("ERROR: Could not evaluate matches: %s", err.Error())
 		return err
 	}
 
-	for _, game := range res.ResponseWrapper.Games {
-		match, err := gameToMatch(game) // convert to our mongo schema
-
-		if err != nil {
-			log.Printf("ERROR: could not save match %s: %s", game.GameID, err.Error())
-			return err
-		}
-
-		err = insertMatch(*match)
-
-		if err != nil {
-			log.Println(err.Error())
-			return err
-		}
+	if len(matches) == 0 {
+		return fmt.Errorf("no matches found for date %s", date)
 	}
 
-	return nil
+	reportGames := make(map[int64]gameReport)
+	for _, game := range matches {
+		gameReport := gameReport{
+			HomeTeam: game.HomeTeam,
+			AwayTeam: game.AwayTeam,
+			Venue:    game.Venue,
+			Date:     game.StartDate,
+		}
+
+		reportGames[game.ID] = gameReport
+	}
+
+	report := gameDayReport{
+		ID:        date,
+		Games:     reportGames,
+		Deadline:  matches[0].StartDate,
+		Evaluated: false,
+	}
+
+	return upsertGameDayReport(report)
 }

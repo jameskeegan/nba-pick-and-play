@@ -2,34 +2,81 @@ package main
 
 import (
 	"encoding/json"
-	"nba-pick-and-play/config"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 )
 
 type (
+	// response format for the rapid NBA API response
+	rapidResponse struct {
+		ResponseWrapper rapidResponseWrapper `json:"API"`
+	}
+
+	rapidResponseWrapper struct {
+		Status  int         `json:"status"`
+		Message string      `json:"message"`
+		Results int         `json:"results"`
+		Filters []string    `json:"filters"`
+		Games   []rapidGame `json:"games"`
+	}
+
+	rapidGame struct {
+		SeasonYear      string    `json:"seasonYear"`
+		League          string    `json:"league"`
+		GameID          string    `json:"gameId"`
+		StartTimeUTC    time.Time `json:"startTimeUTC"`
+		EndTimeUTC      string    `json:"endTimeUTC"`
+		Arena           string    `json:"arena"`
+		City            string    `json:"city"`
+		Country         string    `json:"country"`
+		Clock           string    `json:"clock"`
+		GameDuration    string    `json:"gameDuration"`
+		CurrentPeriod   string    `json:"currentPeriod"`
+		Halftime        string    `json:"halftime"`
+		EndOfPeriod     string    `json:"EndOfPeriod"`
+		SeasonStage     string    `json:"seasonStage"`
+		StatusShortGame string    `json:"statusShortGame"`
+		StatusGame      string    `json:"statusGame"`
+		VTeam           rapidTeam `json:"vTeam"`
+		HTeam           rapidTeam `json:"hTeam"`
+	}
+
+	rapidTeam struct {
+		TeamID    string     `json:"teamId"`
+		ShortName string     `json:"shortName"`
+		FullName  string     `json:"fullName"`
+		NickName  string     `json:"nickName"`
+		Logo      string     `json:"logo"`
+		Score     rapidScore `json:"score"`
+	}
+
+	rapidScore struct {
+		Points string `json:"points"`
+	}
+
 	// interface so that we can substitute in a mock for testing
 	rapidAPIInterface interface {
 		getMatchesByDateRequest(date string) (*rapidResponse, error)
 	}
 
-	baseRapidAPIClient struct{}
+	baseRapidAPIClient struct {
+		baseURL string
+		apiKey  string
+	}
 )
 
-var (
-	rapidAPIClient rapidAPIInterface
-)
-
-func (baseRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
+func (c baseRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
 	client := http.Client{}
-	req, err := http.NewRequest("GET", config.Config.Rapid.BaseURL+date, nil)
+	req, err := http.NewRequest("GET", c.baseURL+date, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Add("x-rapidapi-key", config.Config.Rapid.APIKey)
+	req.Header.Add("x-rapidapi-key", c.apiKey)
 
 	resp, err := client.Do(req)
 
@@ -45,107 +92,103 @@ func (baseRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, 
 	return &response, nil
 }
 
-type (
-	rapidResponse struct {
-		ResponseWrapper rapidResponseWrapper `json:"API"`
-	}
-
-	rapidResponseWrapper struct {
-		Status  int         `json:"status"`
-		Message string      `json:"message"`
-		Results int         `json:"results"`
-		Filters []string    `json:"filters"`
-		Games   []rapidGame `json:"games"`
-	}
-
-	rapidGame struct {
-		SeasonYear      string     `json:"seasonYear"`
-		League          string     `json:"league"`
-		GameID          string     `json:"gameId"`
-		StartTimeUTC    time.Time  `json:"startTimeUTC"`
-		EndTimeUTC      *time.Time `json:"endTimeUTC"`
-		Arena           string     `json:"arena"`
-		City            string     `json:"city"`
-		Country         string     `json:"country"`
-		Clock           string     `json:"clock"`
-		GameDuration    string     `json:"gameDuration"`
-		CurrentPeriod   string     `json:"currentPeriod"`
-		Halftime        string     `json:"halftime"`
-		EndOfPeriod     string     `json:"EndOfPeriod"`
-		SeasonStage     string     `json:"seasonStage"`
-		StatusShortGame string     `json:"statusShortGame"`
-		StatusGame      string     `json:"statusGame"`
-		VTeam           rapidTeam  `json:"vTeam"`
-		HTeam           rapidTeam  `json:"hTeam"`
-	}
-
-	rapidTeam struct {
-		TeamID    string     `json:"teamId"`
-		ShortName string     `json:"shortName"`
-		FullName  string     `json:"fullName"`
-		NickName  string     `json:"nickName"`
-		Logo      string     `json:"logo"`
-		Score     rapidScore `json:"score"`
-	}
-
-	rapidScore struct {
-		Points string `json:"points"`
-	}
-)
-
 const (
 	statusFinished = "Finished"
 )
 
-func gameToMatch(game rapidGame) (*match, error) {
-	matchID, err := strconv.ParseInt(game.GameID, 10, 64)
+var (
+	rapidAPIClient rapidAPIInterface
+)
+
+func pollGames(dates ...string) error {
+	log.Printf("Polling games for date(s) %v...", dates)
+
+	for _, date := range dates {
+		err := saveMatchDay(date)
+
+		if err != nil {
+			log.Println(err.Error())
+			return err
+		}
+	}
+
+	log.Printf("Successfully polled for games")
+	return nil
+}
+
+func saveMatchDay(date string) error {
+	res, err := rapidAPIClient.getMatchesByDateRequest(date)
+
+	if err != nil {
+		return fmt.Errorf("ERROR: Could not evaluate matches for date %s: %s", date, err.Error())
+	}
+
+	for _, rapidGame := range res.ResponseWrapper.Games {
+		game, err := rapidGameToGame(rapidGame) // convert to our mongo schema
+
+		if err != nil {
+			return fmt.Errorf("ERROR: could not conver from rapid game to game %s: %s", rapidGame.GameID, err.Error())
+		}
+
+		err = upsertMatch(*game)
+
+		if err != nil {
+			return fmt.Errorf("ERROR: could not save game %d: %s", game.ID, err.Error())
+		}
+	}
+
+	return nil
+}
+
+func rapidGameToGame(rapidGame rapidGame) (*game, error) {
+	matchID, err := strconv.ParseInt(rapidGame.GameID, 10, 64)
 
 	if err != nil {
 		return nil, err
 	}
 
-	homeTeam, err := rapidTeamToTeam(game.HTeam, game.StatusGame)
+	homeTeam, err := rapidTeamToTeam(rapidGame.HTeam, rapidGame.StatusGame)
 
 	if err != nil {
 		return nil, err
 	}
 
-	awayTeam, err := rapidTeamToTeam(game.VTeam, game.StatusGame)
+	awayTeam, err := rapidTeamToTeam(rapidGame.VTeam, rapidGame.StatusGame)
 
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: parse date irregularities
-	match := &match{
+	game := &game{
 		ID:          matchID,
-		SeasonID:    game.SeasonYear,
-		Status:      game.StatusGame,
-		SeasonStage: game.SeasonStage,
-		StartDate:   game.StartTimeUTC,
+		SeasonID:    rapidGame.SeasonYear,
+		Status:      rapidGame.StatusGame,
+		SeasonStage: rapidGame.SeasonStage,
+		StartDate:   rapidGame.StartTimeUTC,
 		HomeTeam:    *homeTeam,
 		AwayTeam:    *awayTeam,
 		Venue: venue{
-			Name:    game.Arena,
-			City:    game.City,
-			Country: game.Country,
+			Name:    rapidGame.Arena,
+			City:    rapidGame.City,
+			Country: rapidGame.Country,
 		},
 	}
 
-	if match.Status == statusFinished {
-		match.WinnerID = determineWinner(match.HomeTeam, match.AwayTeam)
+	if game.Status == statusFinished {
+		game.WinnerID = determineWinner(game.HomeTeam, game.AwayTeam)
 	}
 
 	// work out the game date id
-	if isPreviousDayGame(game.StartTimeUTC) {
+	if isPreviousDayGame(rapidGame.StartTimeUTC) {
 		// game date id is for the previous day (e.g. game took place at 3am UTC - 8pm PST)
-		match.GameDateID = game.StartTimeUTC.Add(-24 * time.Hour).Format(basicDateFormat)
+		game.GameDayID = rapidGame.StartTimeUTC.Add(-24 * time.Hour).Format(basicDateFormat)
 	} else {
 		// game took place on the date specified
-		match.GameDateID = game.StartTimeUTC.Format(basicDateFormat)
+		game.GameDayID = rapidGame.StartTimeUTC.Format(basicDateFormat)
 	}
 
-	return match, nil
+	return game, nil
 }
 
 func rapidTeamToTeam(rapidTeam rapidTeam, status string) (*team, error) {
@@ -184,9 +227,9 @@ func determineWinner(home team, away team) int64 {
 }
 
 /*
-	Rapid dates are returned as UTC, which means some games are listed as being on the wrong day
+	Rapid dates are returned as UTC, which means some games are listed as being on the wrong "game" day
 	e.g. if a game starts at 8pm in LA (PST) then it'll be listed as the following day at 3am (UTC)
 */
 func isPreviousDayGame(date time.Time) bool {
-	return date.Hour() < 12
+	return date.Hour() < 12 // before/after noon can determine the day
 }

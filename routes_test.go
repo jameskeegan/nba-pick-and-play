@@ -1,147 +1,240 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
-	"nba-pick-and-play/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type (
 	matchesResponse struct {
-		Code      int     `json:"code"`
-		Matches   []match `json:"data,omitempty"`
-		Error     string  `json:"error,omitempty"`
-		CreatedAt string  `json:"createdAt"`
+		Code      int           `json:"code"`
+		Report    gameDayReport `json:"data,omitempty"`
+		Error     string        `json:"error,omitempty"`
+		CreatedAt string        `json:"createdAt"`
+	}
+
+	picksResponse struct {
+		Code      int         `json:"code"`
+		Data      interface{} `json:"data,omitempty"`
+		Error     string      `json:"error,omitempty"`
+		CreatedAt string      `json:"createdAt"`
 	}
 )
 
-func init() {
-	config.LoadConfig("config/config_test.toml")
-
-	setupDatabase()
-
-	// mock API to return the json test files data as responses
-	rapidAPIClient = mockRapidAPIClient{}
-}
-
-func TestGetMatchesByDateNotFound(t *testing.T) {
+func TestGetGameDayReportSuccess(t *testing.T) {
 	defer cleanDatabase(t)
 
-	// call the endpoint
-	req, err := http.NewRequest("GET", "/v1/user/matches", nil)
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf(err.Error())
-	}
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	// call the endpoint
+	req, err := http.NewRequest("GET", "/v1/user/games", nil)
+	assert.Nil(t, err)
 
 	w := httptest.NewRecorder()
-	handler := http.HandlerFunc(getMatchesByDate)
+	handler := http.HandlerFunc(getGameDayReport)
 	handler.ServeHTTP(w, req)
 
 	res := w.Result()
 
-	if res.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected 404, got %d", res.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	var response matchesResponse
 	err = json.NewDecoder(res.Body).Decode(&response)
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf("Unexpected error when decoding response: %s", err.Error())
-	}
-
-	dateToday := time.Now().Format(basicDateFormat)
-	expectedMessage := fmt.Sprintf("no matches found for game date '%s'", dateToday)
-
-	if response.Error != expectedMessage {
-		t.Errorf("Expected %q, got %q", expectedMessage, response.Error)
-	}
+	assert.Equal(t, "2020-01-18", response.Report.ID)
+	assert.Equal(t, 11, len(response.Report.Games))
 }
 
-func TestGetMatchesByDateSpecificDateNotFound(t *testing.T) {
+// current game day is still technically the previous night if the service is called pre 9am
+func TestGetGameDayReportSuccessPreRollover(t *testing.T) {
 	defer cleanDatabase(t)
 
-	// call the endpoint
-	req, err := http.NewRequest("GET", "/v1/user/matches?date=2020-01-18", nil)
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf(err.Error())
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	clockClient = mockClock{ // 8:30am on the 19th Jan
+		date: time.Date(2020, time.January, 19, 8, 30, 0, 0, time.UTC),
 	}
 
+	defer setDefaultMockClock()
+
+	// call the endpoint
+	req, err := http.NewRequest("GET", "/v1/user/games", nil)
+	assert.Nil(t, err)
+
 	w := httptest.NewRecorder()
-	handler := http.HandlerFunc(getMatchesByDate)
+	handler := http.HandlerFunc(getGameDayReport)
 	handler.ServeHTTP(w, req)
 
 	res := w.Result()
 
-	if res.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected 404, got %d", res.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	var response matchesResponse
 	err = json.NewDecoder(res.Body).Decode(&response)
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf("Unexpected error when decoding response: %s", err.Error())
-	}
-
-	if response.Error != "no matches found for game date '2020-01-18'" {
-		t.Errorf("Expected \"no matches found for game date '2020-01-18'\", got %q", response.Error)
-	}
+	assert.Equal(t, "2020-01-18", response.Report.ID)
+	assert.Equal(t, 11, len(response.Report.Games))
 }
 
-func TestGetMatchesByDateSuccess(t *testing.T) {
+func TestMakePicksPastDeadline(t *testing.T) {
 	defer cleanDatabase(t)
 
-	// load the mock data into the db
-	date := time.Date(2020, time.January, 18, 9, 0, 0, 0, time.UTC) // 9am, Jan 18th 2020
-	err := evaluateMatches(date)
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf("Expected no error, got %s", err.Error())
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	// missed deadline by half an hour (8:30pm is tip off for first game)
+	clockClient = mockClock{
+		date: time.Date(2020, time.January, 18, 21, 0, 0, 0, time.UTC),
 	}
+
+	defer setDefaultMockClock()
+
+	payload := picksPayload{
+		GameDayID: "2020-01-18",
+		Picks: map[int64]int64{
+			7015: 23,
+		},
+	}
+
+	body := new(bytes.Buffer)
+	json.NewEncoder(body).Encode(payload)
 
 	// call the endpoint
-	req, err := http.NewRequest("GET", "/v1/user/matches?date=2020-01-18", nil)
-
-	if err != nil {
-		t.Errorf(err.Error())
-	}
+	req, err := http.NewRequest("POST", "/v1/user/picks", body)
+	assert.Nil(t, err)
 
 	w := httptest.NewRecorder()
-	handler := http.HandlerFunc(getMatchesByDate)
+	handler := http.HandlerFunc(makePicks)
 	handler.ServeHTTP(w, req)
 
 	res := w.Result()
 
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected 200, got %d", res.StatusCode)
-	}
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 
-	var response matchesResponse
+	var response picksResponse
 	err = json.NewDecoder(res.Body).Decode(&response)
+	assert.Nil(t, err)
 
-	if err != nil {
-		t.Errorf("Unexpected error when decoding response: %s", err.Error())
+	assert.Equal(t, "missed deadline: 2020-01-18 20:30:00 +0000 UTC", response.Error)
+}
+
+func TestMakePicksWrongGame(t *testing.T) {
+	defer cleanDatabase(t)
+
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
+
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	payload := picksPayload{
+		GameDayID: "2020-01-18",
+		Picks: map[int64]int64{
+			12345: 23, // not a game being played on this date
+		},
 	}
 
-	if len(response.Matches) != 11 {
-		t.Errorf("Expected 11 matches, got %d", len(response.Matches))
+	body := new(bytes.Buffer)
+	json.NewEncoder(body).Encode(payload)
+
+	// call the endpoint
+	req, err := http.NewRequest("POST", "/v1/user/picks", body)
+	assert.Nil(t, err)
+
+	w := httptest.NewRecorder()
+	handler := http.HandlerFunc(makePicks)
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+	var response picksResponse
+	err = json.NewDecoder(res.Body).Decode(&response)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "game with id 12345 is not being played on this game day", response.Error)
+}
+
+func TestMakePicksSuccess(t *testing.T) {
+	defer cleanDatabase(t)
+
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
+
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	payload := picksPayload{
+		GameDayID: "2020-01-18",
+		Picks: map[int64]int64{
+			7015: 23,
+			7016: 21,
+			7017: 2,
+			7018: 1,
+			7019: 27,
+			7020: 7,
+			7021: 38,
+			7022: 17,
+			7023: 11,
+			7024: 25,
+			7025: 40,
+		},
 	}
 
-	// first match in sorted list of matches
-	pelsVsClippers := response.Matches[0]
+	body := new(bytes.Buffer)
+	json.NewEncoder(body).Encode(payload)
 
-	if pelsVsClippers.GameDateID != "2020-01-18" {
-		t.Errorf("Expected game date \"2020-01-18\", got %q", pelsVsClippers.GameDateID)
-	}
+	// call the endpoint
+	req, err := http.NewRequest("POST", "/v1/user/picks", body)
+	assert.Nil(t, err)
 
-	if pelsVsClippers.ID != 7015 {
-		t.Errorf("Expected id '7015', got '%d'", pelsVsClippers.ID)
+	w := httptest.NewRecorder()
+	handler := http.HandlerFunc(makePicks)
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	picks, err := findPickReportsByGameDayID("2020-01-18")
+	assert.Nil(t, err)
+
+	assert.NotNil(t, picks)
+	assert.Equal(t, 1, len(picks))
+
+	pickReport := picks[0]
+	assert.Equal(t, "2020-01-18", pickReport.GameDayID)
+	assert.Equal(t, 11, len(pickReport.Picks))
+	assert.False(t, pickReport.Evaluated)
+	assert.Zero(t, pickReport.Score)
+
+	for _, p := range pickReport.Picks {
+		assert.NotZero(t, p.SelectionID)
+		assert.Equal(t, "PENDING", p.Status)
 	}
 }

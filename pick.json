@@ -1,0 +1,22 @@
+{
+    "userId": 12345,
+    "gameDayId": "2020-01-18",
+    "matches": 11,
+    "picks": [
+        {
+            "7005": {
+                "pick": 21,
+                "result": "CORRECT"
+            }
+        },
+        {
+            "7006": {
+                "pick": 16,
+                "result": "INCORRECT"
+            }
+        }
+    ],
+    "date": "2020-01-18T13:45:06.000Z",
+    "evaluated": true,
+    "score": 7
+}
