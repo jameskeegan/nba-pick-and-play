@@ -11,6 +11,41 @@ const (
 	basicDateFormat = "2006-01-02"
 )
 
+// for a given game day, create a report detailing the games being played
+func createGameDayReport(date string) error {
+	matches, err := findMatchesByGameDateID(date)
+
+	if err != nil {
+		return err
+	}
+
+	if len(matches) == 0 {
+		return fmt.Errorf("no matches found for date %s", date)
+	}
+
+	reportGames := make(map[int64]gameReport)
+	for _, game := range matches {
+		gameReport := gameReport{
+			HomeTeam: game.HomeTeam,
+			AwayTeam: game.AwayTeam,
+			Venue:    game.Venue,
+			Date:     game.StartDate,
+		}
+
+		reportGames[game.ID] = gameReport
+	}
+
+	report := gameDayReport{
+		ID:        date,
+		Games:     reportGames,
+		Deadline:  matches[0].StartDate,
+		Evaluated: false,
+	}
+
+	err = upsertGameDayReport(report)
+	return err
+}
+
 // for a given game day, get the correct picks and evaluate every pick
 func evaluateGameDayReport(date string) error {
 	report, err := findGameDayReportByID(date)
@@ -49,39 +84,6 @@ func evaluateGameDayReport(date string) error {
 		return err
 	}
 
-	return evaluatePicks(*report, date)
-}
-
-func createGameDayReport(date string) error {
-	// get all matches for this game day, sorted with earliest first
-	matches, err := findMatchesByGameDateID(date)
-
-	if err != nil {
-		return err
-	}
-
-	if len(matches) == 0 {
-		return fmt.Errorf("no matches found for date %s", date)
-	}
-
-	reportGames := make(map[int64]gameReport)
-	for _, game := range matches {
-		gameReport := gameReport{
-			HomeTeam: game.HomeTeam,
-			AwayTeam: game.AwayTeam,
-			Venue:    game.Venue,
-			Date:     game.StartDate,
-		}
-
-		reportGames[game.ID] = gameReport
-	}
-
-	report := gameDayReport{
-		ID:        date,
-		Games:     reportGames,
-		Deadline:  matches[0].StartDate,
-		Evaluated: false,
-	}
-
-	return upsertGameDayReport(report)
+	err = evaluatePicks(*report, date)
+	return err
 }

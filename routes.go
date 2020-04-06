@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"nba-pick-and-play/config"
 	"nba-pick-and-play/response"
 	"net/http"
 	"time"
@@ -16,6 +18,10 @@ type (
 		GameDayID string          `json:"gameDayId"`
 		Picks     map[int64]int64 `json:"picks"` // game id -> winner
 	}
+)
+
+const (
+	genericError = "Something went wrong, speak to Keegan."
 )
 
 func getGameDayReport(w http.ResponseWriter, r *http.Request) {
@@ -33,11 +39,58 @@ func getGameDayReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response.ReturnInternalServerError(w, nil, err.Error())
+		log.Printf("ERROR: %s", err.Error())
+		response.ReturnInternalServerError(w, nil, genericError)
 		return
 	}
 
 	response.ReturnStatusOK(w, gameDayReport)
+}
+
+func getGameDayResultsReport(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+
+	if date == "" { // defaults to yesterday's results
+		date = getCurrentGameDay(clockClient.now().Add(-24 * time.Hour))
+	}
+
+	resultsReport, err := findGameDayResultsReportByID(date)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			response.ReturnNotFound(w, nil, fmt.Sprintf("could not find game day for date %s", date))
+			return
+		}
+
+		log.Printf("ERROR: %s", err.Error())
+		response.ReturnInternalServerError(w, nil, genericError)
+		return
+	}
+
+	response.ReturnStatusOK(w, resultsReport)
+}
+
+func getLeaderboard(w http.ResponseWriter, r *http.Request) {
+	season := r.URL.Query().Get("season")
+
+	if season == "" { // defaults to the current season
+		season = config.Config.Rapid.Season
+	}
+
+	leaderboard, err := findLeaderboardByID(season)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			response.ReturnNotFound(w, nil, fmt.Sprintf("could not find leaderboard for season %s", season))
+			return
+		}
+
+		log.Printf("ERROR: %s", err.Error())
+		response.ReturnInternalServerError(w, nil, genericError)
+		return
+	}
+
+	response.ReturnStatusOK(w, leaderboard)
 }
 
 func makePicks(w http.ResponseWriter, r *http.Request) {
@@ -68,20 +121,10 @@ func makePicks(w http.ResponseWriter, r *http.Request) {
 	err = upsertGameDayPicks(gameDayPicks)
 
 	if err != nil {
-		response.ReturnInternalServerError(w, nil, err.Error())
+		log.Printf("ERROR: %s", err.Error())
+		response.ReturnInternalServerError(w, nil, genericError)
 		return
 	}
 
 	response.ReturnStatusOK(w, nil)
-}
-
-func getCurrentGameDay(date time.Time) string {
-	timeNow := clockClient.now()
-
-	// game day rolls over at 9am
-	if clockClient.now().Hour() < 9 {
-		return timeNow.Add(-24 * time.Hour).Format(basicDateFormat)
-	}
-
-	return timeNow.Format(basicDateFormat)
 }

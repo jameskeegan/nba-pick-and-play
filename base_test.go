@@ -115,4 +115,22 @@ func cleanDatabase(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Failed to drop collection: %s", err.Error())
 	}
+
+	_, err = db.Collection(gameDayResultsCollection).DeleteMany(
+		context.Background(),
+		bson.M{},
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to drop collection: %s", err.Error())
+	}
+
+	_, err = db.Collection(leaderboardCollection).DeleteMany(
+		context.Background(),
+		bson.M{},
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to drop collection: %s", err.Error())
+	}
 }

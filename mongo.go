@@ -70,12 +70,30 @@ type (
 		SelectionID int64  `bson:"selectionId" json:"selectionId"`
 		Status      string `bson:"status" json:"status"`
 	}
+
+	gameDayResults struct {
+		ID         string   `bson:"_id" json:"id"`
+		UserScores []result `bson:"scores" json:"scores"`
+	}
+
+	leaderboard struct {
+		ID                   string            `bson:"_id" json:"id"` // the specific season
+		Standings            []leaderboardUser `bson:"standings" json:"standings"`
+		LastGameDayEvaluated string            `bson:"lastGameDay" json:"lastGameDay"`
+	}
+
+	leaderboardUser struct {
+		UserID int64 `bson:"userId" json:"userId"`
+		Score  int64 `bson:"score" json:"score"`
+	}
 )
 
 const (
-	gameDaysCollection = "gameDays"
-	gamesCollection    = "games"
-	picksCollection    = "picks"
+	gameDaysCollection       = "gameDays"
+	gameDayResultsCollection = "gameDayResults"
+	gamesCollection          = "games"
+	leaderboardCollection    = "leaderboards"
+	picksCollection          = "picks"
 )
 
 var (
@@ -163,6 +181,34 @@ func findGameDayReportByID(id string) (*gameDayReport, error) {
 	return &report, err
 }
 
+func findGameDayResultsReportByID(id string) (*gameDayResults, error) {
+	db := getDatabase()
+
+	var results gameDayResults
+	err := db.Collection(gameDayResultsCollection).FindOne(
+		context.Background(),
+		bson.D{
+			{"_id", id},
+		},
+	).Decode(&results)
+
+	return &results, err
+}
+
+func findLeaderboardByID(id string) (*leaderboard, error) {
+	db := getDatabase()
+
+	var leaderboard leaderboard
+	err := db.Collection(leaderboardCollection).FindOne(
+		context.Background(),
+		bson.D{
+			{"_id", id},
+		},
+	).Decode(&leaderboard)
+
+	return &leaderboard, err
+}
+
 func findPickReportsByGameDayID(date string) ([]gameDayPicks, error) {
 	db := getDatabase()
 
@@ -170,6 +216,27 @@ func findPickReportsByGameDayID(date string) ([]gameDayPicks, error) {
 		context.Background(),
 		bson.D{
 			{"gameDayId", date},
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var picks []gameDayPicks
+	err = cur.All(context.Background(), &picks)
+
+	return picks, err
+}
+
+func findPickReportsByGameDayIDAndEvaluated(date string, evaluated bool) ([]gameDayPicks, error) {
+	db := getDatabase()
+
+	cur, err := db.Collection(picksCollection).Find(
+		context.Background(),
+		bson.D{
+			{"gameDayId", date},
+			{"evaluated", evaluated},
 		},
 	)
 
@@ -239,6 +306,46 @@ func upsertGameDayReport(report gameDayReport) error {
 			{"_id", report.ID},
 		},
 		report,
+		&options,
+	)
+
+	return err
+}
+
+func upsertGameDayResults(date string, results []result) error {
+	db := getDatabase()
+
+	options := options.UpdateOptions{}
+	options.SetUpsert(true)
+
+	_, err := db.Collection(gameDayResultsCollection).UpdateOne(
+		context.Background(),
+		bson.D{
+			{"_id", date},
+		},
+		bson.D{
+			{"$set", bson.D{
+				{"scores", results},
+			}},
+		},
+		&options,
+	)
+
+	return err
+}
+
+func upsertLeaderboard(leaderboard leaderboard) error {
+	db := getDatabase()
+
+	options := options.ReplaceOptions{}
+	options.SetUpsert(true)
+
+	_, err := db.Collection(leaderboardCollection).ReplaceOne(
+		context.Background(),
+		bson.D{
+			{"_id", leaderboard.ID},
+		},
+		leaderboard,
 		&options,
 	)
 

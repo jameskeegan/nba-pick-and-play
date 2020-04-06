@@ -61,6 +61,8 @@ func main() {
 func initRouter(router *mux.Router) {
 	userRouter := router.PathPrefix("/v1/user").Subrouter()
 	userRouter.HandleFunc("/games", getGameDayReport).Methods("GET")
+	userRouter.HandleFunc("/results", getGameDayResultsReport).Methods("GET")
+	userRouter.HandleFunc("/leaderboards", getLeaderboard).Methods("GET")
 	userRouter.HandleFunc("/picks", makePicks).Methods("POST")
 
 	adminRouter := router.PathPrefix("/v1/admin").Subrouter()
@@ -100,6 +102,9 @@ func dailyCron() {
 
 	if err != nil { // don't return if err occurs, still create upcoming report
 		log.Printf(err.Error())
+		log.Printf("Leaderboards have not been updated")
+	} else {
+		go createGameDayResults(dateYesterday)
 	}
 
 	// create a report for the upcoming matches

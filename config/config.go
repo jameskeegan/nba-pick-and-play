@@ -25,6 +25,7 @@ type (
 
 	Rapid struct {
 		Enabled bool
+		Season  string
 		BaseURL string
 		APIKey  string
 	}

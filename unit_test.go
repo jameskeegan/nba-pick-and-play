@@ -140,6 +140,108 @@ func TestEvaluateGameDayReportSuccess(t *testing.T) {
 	assert.Equal(t, int64(7), rep.Score)
 }
 
+func TestCreateGameDayResultsReportSuccess(t *testing.T) {
+	defer cleanDatabase(t)
+
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
+
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	// create three sets of pick reports
+	picks := gameDayPicks{
+		UserID:    12345,
+		GameDayID: "2020-01-18",
+		Picks:     make(map[int64]pick), // doesn't matter for this
+		Evaluated: true,
+		Score:     7,
+	}
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	picks.UserID = 67890
+	picks.Score = 9
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	picks.UserID = 13579
+	picks.Score = 4
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	createGameDayResults("2020-01-18")
+
+	report, err := findGameDayResultsReportByID("2020-01-18")
+	assert.Nil(t, err)
+
+	assert.Equal(t, "2020-01-18", report.ID)
+
+	assert.NotNil(t, report.UserScores)
+	assert.Equal(t, 3, len(report.UserScores))
+
+	assert.Equal(t, int64(67890), report.UserScores[0].UserID)
+	assert.Equal(t, int64(9), report.UserScores[0].Score)
+
+	assert.Equal(t, int64(12345), report.UserScores[1].UserID)
+	assert.Equal(t, int64(13579), report.UserScores[2].UserID)
+}
+
+func TestUpdateLeaderboard(t *testing.T) {
+	defer cleanDatabase(t)
+
+	// poll matches, create a report for the day
+	err := pollGames("2020-01-18", "2020-01-19")
+	assert.Nil(t, err)
+
+	err = createGameDayReport("2020-01-18")
+	assert.Nil(t, err)
+
+	// create three sets of pick reports
+	picks := gameDayPicks{
+		UserID:    12345,
+		GameDayID: "2020-01-18",
+		Picks:     make(map[int64]pick), // doesn't matter for this
+		Evaluated: true,
+		Score:     7,
+	}
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	picks.UserID = 67890
+	picks.Score = 9
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	picks.UserID = 13579
+	picks.Score = 4
+
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
+
+	createGameDayResults("2020-01-18")
+
+	leaderboard, err := findLeaderboardByID("2019")
+	assert.Nil(t, err)
+
+	assert.NotNil(t, leaderboard)
+	assert.Equal(t, "2019", leaderboard.ID)
+	assert.Equal(t, "2020-01-18", leaderboard.LastGameDayEvaluated)
+
+	assert.Equal(t, 3, len(leaderboard.Standings))
+	assert.Equal(t, int64(67890), leaderboard.Standings[0].UserID)
+	assert.Equal(t, int64(9), leaderboard.Standings[0].Score)
+
+	assert.Equal(t, int64(12345), leaderboard.Standings[1].UserID)
+	assert.Equal(t, int64(13579), leaderboard.Standings[2].UserID)
+}
+
 func createPicks() map[int64]pick {
 	return map[int64]pick{
 		7015: pick{

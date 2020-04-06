@@ -19,6 +19,13 @@ type (
 		CreatedAt string        `json:"createdAt"`
 	}
 
+	resultsResponse struct {
+		Code      int            `json:"code"`
+		Results   gameDayResults `json:"data,omitempty"`
+		Error     string         `json:"error,omitempty"`
+		CreatedAt string         `json:"createdAt"`
+	}
+
 	picksResponse struct {
 		Code      int         `json:"code"`
 		Data      interface{} `json:"data,omitempty"`
@@ -92,6 +99,93 @@ func TestGetGameDayReportSuccessPreRollover(t *testing.T) {
 
 	assert.Equal(t, "2020-01-18", response.Report.ID)
 	assert.Equal(t, 11, len(response.Report.Games))
+}
+
+func TestGetGameDayResultsReportSuccess(t *testing.T) {
+	defer cleanDatabase(t)
+
+	clockClient = mockClock{ // noon on the 19th Jan
+		date: time.Date(2020, time.January, 19, 12, 0, 0, 0, time.UTC),
+	}
+
+	defer setDefaultMockClock()
+
+	scores := []result{
+		result{
+			UserID: 12345,
+			Score:  9,
+		},
+		result{
+			UserID: 67890,
+			Score:  7,
+		},
+		result{
+			UserID: 13579,
+			Score:  2,
+		},
+	}
+
+	err := upsertGameDayResults("2020-01-18", scores)
+	assert.Nil(t, err)
+
+	// call the endpoint
+	req, err := http.NewRequest("GET", "/v1/user/results", nil)
+	assert.Nil(t, err)
+
+	w := httptest.NewRecorder()
+	handler := http.HandlerFunc(getGameDayResultsReport)
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	var response resultsResponse
+	err = json.NewDecoder(res.Body).Decode(&response)
+	assert.Nil(t, err)
+
+	assert.NotNil(t, response)
+	assert.Equal(t, "2020-01-18", response.Results.ID)
+
+	assert.Equal(t, 3, len(response.Results.UserScores))
+}
+
+func TestGetLeaderboard(t *testing.T) {
+	defer cleanDatabase(t)
+
+	lboard := leaderboard{
+		ID: "2019",
+		Standings: []leaderboardUser{
+			{
+				UserID: 12345,
+				Score:  9,
+			},
+			{
+				UserID: 67890,
+				Score:  7,
+			},
+			{
+				UserID: 13579,
+				Score:  2,
+			},
+		},
+		LastGameDayEvaluated: "2020-01-18",
+	}
+
+	err := upsertLeaderboard(lboard)
+	assert.Nil(t, err)
+
+	// call the endpoint
+	req, err := http.NewRequest("GET", "/v1/user/leaderboards", nil)
+	assert.Nil(t, err)
+
+	w := httptest.NewRecorder()
+	handler := http.HandlerFunc(getLeaderboard)
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode)
 }
 
 func TestMakePicksPastDeadline(t *testing.T) {
