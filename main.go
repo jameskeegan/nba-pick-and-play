@@ -1,13 +1,13 @@
 package main
 
 import (
-	"log"
 	"nba-pick-and-play/config"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 )
 
@@ -26,11 +26,16 @@ func (realClock) now() time.Time {
 var (
 	validate    *validator.Validate
 	clockClient clock
+
+	log *logrus.Logger
 )
 
-func main() {
+func init() {
+	log = logrus.New()
 	config.LoadConfig("config/config_dev.toml")
+}
 
+func main() {
 	setupDatabase()
 
 	if config.Config.Rapid.Enabled {
@@ -60,14 +65,13 @@ func main() {
 
 func initRouter(router *mux.Router) {
 	userRouter := router.PathPrefix("/v1/user").Subrouter()
+
 	userRouter.HandleFunc("/games", getGameDayReport).Methods("GET")
 	userRouter.HandleFunc("/results", getGameDayResultsReport).Methods("GET")
 	userRouter.HandleFunc("/leaderboards", getLeaderboard).Methods("GET")
 	userRouter.HandleFunc("/picks", makePicks).Methods("POST")
 
-	adminRouter := router.PathPrefix("/v1/admin").Subrouter()
-	adminRouter.HandleFunc("/evaluate", forceEvaluation).Methods("POST")
-	adminRouter.HandleFunc("/poll", doAPoll).Methods("POST")
+	// TODO: admin router for handling resyncs
 }
 
 /*
@@ -80,7 +84,6 @@ func initRouter(router *mux.Router) {
 	- evaluate last night's matches
 		- get the scores, update the game day report, mark the users picks
 	- create game day report for tonight's upcoming matches
-
 */
 func dailyCron() {
 	dateNow := clockClient.now()
@@ -93,7 +96,7 @@ func dailyCron() {
 	err := pollGames(dateYesterday, dateToday, dateTomorrow)
 
 	if err != nil {
-		log.Printf(err.Error())
+		log.Error(err.Error())
 		return
 	}
 
@@ -101,16 +104,25 @@ func dailyCron() {
 	err = evaluateGameDayReport(dateYesterday)
 
 	if err != nil { // don't return if err occurs, still create upcoming report
-		log.Printf(err.Error())
-		log.Printf("Leaderboards have not been updated")
+		log.Error(err.Error())
 	} else {
-		go createGameDayResults(dateYesterday)
+		err = createGameDayResults(dateYesterday)
+
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		err = updateLeaderboard(config.Config.Rapid.Season)
+
+		if err != nil {
+			log.Error(err.Error())
+		}
 	}
 
-	// create a report for the upcoming matches
-	err = createGameDayReport(dateToday)
+	// create a report for the upcoming matches tonight
+	_, err = createGameDayReport(dateToday)
 
 	if err != nil {
-		log.Printf(err.Error())
+		log.Error(err.Error())
 	}
 }

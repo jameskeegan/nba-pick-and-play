@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"nba-pick-and-play/config"
 	"time"
 
@@ -59,6 +58,7 @@ type (
 	gameDayPicks struct {
 		ID        primitive.ObjectID `bson:"_id" json:"id"`
 		UserID    int64              `bson:"userId" json:"userId"`
+		SeasonID  string             `bson:"seasonId" json:"seasonId"`
 		GameDayID string             `bson:"gameDayId" json:"gameDayId"`
 		Picks     map[int64]pick     `bson:"picks" json:"picks"`
 		Evaluated bool               `bson:"evaluated" json:"evaluated"`
@@ -86,6 +86,13 @@ type (
 		UserID int64 `bson:"userId" json:"userId"`
 		Score  int64 `bson:"score" json:"score"`
 	}
+
+	userScoreOutput struct {
+		ID    int64 `bson:"_id" json:"id"`
+		Score int64 `bson:"score" json:"score"`
+	}
+
+	filter bson.M
 )
 
 const (
@@ -209,14 +216,19 @@ func findLeaderboardByID(id string) (*leaderboard, error) {
 	return &leaderboard, err
 }
 
-func findPickReportsByGameDayID(date string) ([]gameDayPicks, error) {
+func findPickReportsByGameDayID(date string, filters ...filter) ([]gameDayPicks, error) {
 	db := getDatabase()
+
+	queryFilters := bson.M{}
+	queryFilters["gameDayId"] = date
+
+	for _, filter := range filters {
+		addFilter(queryFilters, filter)
+	}
 
 	cur, err := db.Collection(picksCollection).Find(
 		context.Background(),
-		bson.D{
-			{"gameDayId", date},
-		},
+		queryFilters,
 	)
 
 	if err != nil {
@@ -229,25 +241,26 @@ func findPickReportsByGameDayID(date string) ([]gameDayPicks, error) {
 	return picks, err
 }
 
-func findPickReportsByGameDayIDAndEvaluated(date string, evaluated bool) ([]gameDayPicks, error) {
+func aggregateUserScoresForSeason(season string) ([]userScoreOutput, error) {
 	db := getDatabase()
 
-	cur, err := db.Collection(picksCollection).Find(
+	matchStage := bson.D{{"$match", bson.D{{"seasonId", season}}}}
+	groupStage := bson.D{{"$group", bson.D{{"_id", "$userId"}, {"score", bson.D{{"$sum", "$score"}}}}}}
+	sortStage := bson.D{{"$sort", bson.D{{"score", -1}}}}
+
+	cur, err := db.Collection(picksCollection).Aggregate(
 		context.Background(),
-		bson.D{
-			{"gameDayId", date},
-			{"evaluated", evaluated},
-		},
+		mongo.Pipeline{matchStage, groupStage, sortStage},
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
-	var picks []gameDayPicks
-	err = cur.All(context.Background(), &picks)
+	var out []userScoreOutput
+	err = cur.All(context.Background(), &out)
 
-	return picks, err
+	return out, err
 }
 
 func upsertMatch(game game) error {
@@ -279,6 +292,7 @@ func upsertGameDayPicks(picks gameDayPicks) error {
 		bson.D{
 			{"userId", picks.UserID},
 			{"gameDayId", picks.GameDayID},
+			{"seasonId", picks.SeasonID},
 		},
 		bson.D{
 			{"$set", bson.D{
@@ -350,6 +364,12 @@ func upsertLeaderboard(leaderboard leaderboard) error {
 	)
 
 	return err
+}
+
+func addFilter(a bson.M, b filter) {
+	for k, v := range b {
+		a[k] = v
+	}
 }
 
 func getDatabase() *mongo.Database {

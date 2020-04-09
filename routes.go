@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"nba-pick-and-play/config"
 	"nba-pick-and-play/response"
 	"net/http"
@@ -20,9 +19,7 @@ type (
 	}
 )
 
-const (
-	genericError = "Something went wrong, speak to Keegan."
-)
+const genericError = "Something went wrong, speak to Keegan."
 
 func getGameDayReport(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
@@ -35,16 +32,16 @@ func getGameDayReport(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			response.ReturnNotFound(w, nil, fmt.Sprintf("could not find game day for date %s", date))
+			response.ReturnError(w, http.StatusNotFound, fmt.Sprintf("could not find game day for date %s", date))
 			return
 		}
 
-		log.Printf("ERROR: %s", err.Error())
-		response.ReturnInternalServerError(w, nil, genericError)
+		log.Error(err.Error())
+		response.ReturnError(w, http.StatusInternalServerError, genericError)
 		return
 	}
 
-	response.ReturnStatusOK(w, gameDayReport)
+	response.ReturnSuccess(w, http.StatusOK, gameDayReport)
 }
 
 func getGameDayResultsReport(w http.ResponseWriter, r *http.Request) {
@@ -58,16 +55,16 @@ func getGameDayResultsReport(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			response.ReturnNotFound(w, nil, fmt.Sprintf("could not find game day for date %s", date))
+			response.ReturnError(w, http.StatusNotFound, fmt.Sprintf("could not find game day for date %s", date))
 			return
 		}
 
-		log.Printf("ERROR: %s", err.Error())
-		response.ReturnInternalServerError(w, nil, genericError)
+		log.Error(err.Error())
+		response.ReturnError(w, http.StatusInternalServerError, genericError)
 		return
 	}
 
-	response.ReturnStatusOK(w, resultsReport)
+	response.ReturnSuccess(w, http.StatusOK, resultsReport)
 }
 
 func getLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -81,16 +78,16 @@ func getLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			response.ReturnNotFound(w, nil, fmt.Sprintf("could not find leaderboard for season %s", season))
+			response.ReturnError(w, http.StatusNotFound, fmt.Sprintf("could not find leaderboard for season %s", season))
 			return
 		}
 
-		log.Printf("ERROR: %s", err.Error())
-		response.ReturnInternalServerError(w, nil, genericError)
+		log.Error(err.Error())
+		response.ReturnError(w, http.StatusInternalServerError, genericError)
 		return
 	}
 
-	response.ReturnStatusOK(w, leaderboard)
+	response.ReturnSuccess(w, http.StatusOK, leaderboard)
 }
 
 func makePicks(w http.ResponseWriter, r *http.Request) {
@@ -98,14 +95,14 @@ func makePicks(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&payload)
 
 	if err != nil {
-		response.ReturnBadRequest(w, nil, "could not decode json payload")
+		response.ReturnError(w, http.StatusBadRequest, "could not decode json payload")
 		return
 	}
 
 	picks, err := verifyPicks(payload.GameDayID, payload.Picks)
 
 	if err != nil {
-		response.ReturnBadRequest(w, nil, err.Error())
+		response.ReturnError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -113,6 +110,7 @@ func makePicks(w http.ResponseWriter, r *http.Request) {
 	gameDayPicks := gameDayPicks{
 		UserID:    12345, // TODO: user logic
 		GameDayID: payload.GameDayID,
+		SeasonID:  config.Config.Rapid.Season,
 		Picks:     picks,
 		Evaluated: false,
 		Date:      clockClient.now(),
@@ -121,10 +119,10 @@ func makePicks(w http.ResponseWriter, r *http.Request) {
 	err = upsertGameDayPicks(gameDayPicks)
 
 	if err != nil {
-		log.Printf("ERROR: %s", err.Error())
-		response.ReturnInternalServerError(w, nil, genericError)
+		log.Error(err.Error())
+		response.ReturnError(w, http.StatusInternalServerError, genericError)
 		return
 	}
 
-	response.ReturnStatusOK(w, nil)
+	response.ReturnSuccess(w, http.StatusCreated, nil)
 }

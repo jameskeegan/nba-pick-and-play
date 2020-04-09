@@ -10,6 +10,7 @@ As of the 9th April '20, project has the capablility to
 
 ## To-do
 * Proper user logic
+* Proper admin logic
 * Fall back methods if the daily poll fails
 * Expand tests further (currently up to 60.8% line coverage) - Due to the lack of live data, having tests and stub interfaces has become quite important
 

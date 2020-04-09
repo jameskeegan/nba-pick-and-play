@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -100,6 +99,12 @@ var (
 	rapidAPIClient rapidAPIInterface
 )
 
+/*
+	The public Rapid API does not allow for searching over a range of dates, instead just for a single, specified date.
+
+	Because of this, to ensure you get all of the games for a given game night you have to do two calls as the date time
+	is in UTC, meaning some games are before midnight (so on the correct game day) and some are after midnight (the day after the correct game day)
+*/
 func pollGames(dates ...string) error {
 	log.Printf("Polling games for date(s) %v...", dates)
 
@@ -107,12 +112,12 @@ func pollGames(dates ...string) error {
 		err := saveMatchDay(date)
 
 		if err != nil {
-			log.Println(err.Error())
+			log.Error(err.Error())
 			return err
 		}
 	}
 
-	log.Printf("Successfully polled for games")
+	log.Printf("Successful poll for date(s) %v...", dates)
 	return nil
 }
 
@@ -120,20 +125,20 @@ func saveMatchDay(date string) error {
 	res, err := rapidAPIClient.getMatchesByDateRequest(date)
 
 	if err != nil {
-		return fmt.Errorf("ERROR: Could not evaluate matches for date %s: %s", date, err.Error())
+		return fmt.Errorf("could not evaluate matches for date %s: %s", date, err.Error())
 	}
 
 	for _, rapidGame := range res.ResponseWrapper.Games {
 		game, err := rapidGameToGame(rapidGame) // convert to our mongo schema
 
 		if err != nil {
-			return fmt.Errorf("ERROR: could not conver from rapid game to game %s: %s", rapidGame.GameID, err.Error())
+			return fmt.Errorf("could not convert rapid game to game %s: %s", rapidGame.GameID, err.Error())
 		}
 
 		err = upsertMatch(*game)
 
 		if err != nil {
-			return fmt.Errorf("ERROR: could not save game %d: %s", game.ID, err.Error())
+			return fmt.Errorf("could not save game %d: %s", game.ID, err.Error())
 		}
 	}
 
@@ -181,7 +186,7 @@ func rapidGameToGame(rapidGame rapidGame) (*game, error) {
 
 	// work out the game date id
 	if isPreviousDayGame(rapidGame.StartTimeUTC) {
-		// game date id is for the previous day (e.g. game took place at 3am UTC - 8pm PST)
+		// game date id is for the previous day (e.g. game took place at 3am UTC = 8pm PST)
 		game.GameDayID = rapidGame.StartTimeUTC.Add(-24 * time.Hour).Format(basicDateFormat)
 	} else {
 		// game took place on the date specified
@@ -227,7 +232,7 @@ func determineWinner(home team, away team) int64 {
 }
 
 /*
-	Rapid dates are returned as UTC, which means some games are listed as being on the wrong "game" day
+	Rapid dates are returned as UTC, which means some games are listed as being on the wrong "game day"
 	e.g. if a game starts at 8pm in LA (PST) then it'll be listed as the following day at 3am (UTC)
 */
 func isPreviousDayGame(date time.Time) bool {

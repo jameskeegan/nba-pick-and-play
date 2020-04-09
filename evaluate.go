@@ -12,15 +12,15 @@ const (
 )
 
 // for a given game day, create a report detailing the games being played
-func createGameDayReport(date string) error {
+func createGameDayReport(date string) (*gameDayReport, error) {
 	matches, err := findMatchesByGameDateID(date)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(matches) == 0 {
-		return fmt.Errorf("no matches found for date %s", date)
+		return nil, fmt.Errorf("no matches found for date %s", date)
 	}
 
 	reportGames := make(map[int64]gameReport)
@@ -43,7 +43,7 @@ func createGameDayReport(date string) error {
 	}
 
 	err = upsertGameDayReport(report)
-	return err
+	return &report, err
 }
 
 // for a given game day, get the correct picks and evaluate every pick
@@ -51,16 +51,16 @@ func evaluateGameDayReport(date string) error {
 	report, err := findGameDayReportByID(date)
 
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			// one doesn't exist for whatever reason, so make one
-			err = createGameDayReport(date)
-
-			if err != nil {
-				return err
-			}
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			return err
 		}
 
-		return err
+		// report doesn't exist for whatever reason, so make one
+		report, err = createGameDayReport(date)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	games, err := findMatchesByGameDateID(date)

@@ -41,7 +41,7 @@ func TestGetGameDayReportSuccess(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	// call the endpoint
@@ -72,7 +72,7 @@ func TestGetGameDayReportSuccessPreRollover(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	clockClient = mockClock{ // 8:30am on the 19th Jan
@@ -195,10 +195,10 @@ func TestMakePicksPastDeadline(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
-	// missed deadline by half an hour (8:30pm is tip off for first game)
+	// missed deadline by half an hour (8:30pm is tip-off for first game)
 	clockClient = mockClock{
 		date: time.Date(2020, time.January, 18, 21, 0, 0, 0, time.UTC),
 	}
@@ -241,7 +241,7 @@ func TestMakePicksWrongGame(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	payload := picksPayload{
@@ -280,7 +280,7 @@ func TestMakePicksSuccess(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	payload := picksPayload{
@@ -313,7 +313,7 @@ func TestMakePicksSuccess(t *testing.T) {
 
 	res := w.Result()
 
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, http.StatusCreated, res.StatusCode)
 
 	picks, err := findPickReportsByGameDayID("2020-01-18")
 	assert.Nil(t, err)

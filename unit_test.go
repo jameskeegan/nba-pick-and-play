@@ -52,7 +52,7 @@ func TestCreateGameDayReportSuccess(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	report, err := findGameDayReportByID("2020-01-18")
@@ -73,7 +73,7 @@ func TestEvaluateGameDayReportSuccess(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	// create and insert some user picks
@@ -147,7 +147,7 @@ func TestCreateGameDayResultsReportSuccess(t *testing.T) {
 	err := pollGames("2020-01-18", "2020-01-19")
 	assert.Nil(t, err)
 
-	err = createGameDayReport("2020-01-18")
+	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
 	// create three sets of pick reports
@@ -194,100 +194,57 @@ func TestCreateGameDayResultsReportSuccess(t *testing.T) {
 func TestUpdateLeaderboard(t *testing.T) {
 	defer cleanDatabase(t)
 
-	// poll matches, create a report for the day
-	err := pollGames("2020-01-18", "2020-01-19")
-	assert.Nil(t, err)
-
-	err = createGameDayReport("2020-01-18")
-	assert.Nil(t, err)
-
-	// create three sets of pick reports
+	// make some mock picks for user 12345...
 	picks := gameDayPicks{
 		UserID:    12345,
+		SeasonID:  "2019",
 		GameDayID: "2020-01-18",
 		Picks:     make(map[int64]pick), // doesn't matter for this
 		Evaluated: true,
 		Score:     7,
 	}
 
-	err = upsertGameDayPicks(picks)
+	err := upsertGameDayPicks(picks)
 	assert.Nil(t, err)
 
-	picks.UserID = 67890
+	picks.GameDayID = "2020-01-19"
 	picks.Score = 9
 
 	err = upsertGameDayPicks(picks)
 	assert.Nil(t, err)
 
-	picks.UserID = 13579
+	picks.GameDayID = "2020-01-20"
 	picks.Score = 4
 
 	err = upsertGameDayPicks(picks)
 	assert.Nil(t, err)
 
-	createGameDayResults("2020-01-18")
+	//... and some more for mock user 67890
+	picks.UserID = 67890
+	picks.Score = 4
 
-	leaderboard, err := findLeaderboardByID("2019")
+	err = upsertGameDayPicks(picks)
 	assert.Nil(t, err)
 
-	assert.NotNil(t, leaderboard)
-	assert.Equal(t, "2019", leaderboard.ID)
-	assert.Equal(t, "2020-01-18", leaderboard.LastGameDayEvaluated)
+	picks.GameDayID = "2020-01-19"
+	picks.Score = 7
 
-	assert.Equal(t, 3, len(leaderboard.Standings))
-	assert.Equal(t, int64(67890), leaderboard.Standings[0].UserID)
-	assert.Equal(t, int64(9), leaderboard.Standings[0].Score)
+	err = upsertGameDayPicks(picks)
+	assert.Nil(t, err)
 
-	assert.Equal(t, int64(12345), leaderboard.Standings[1].UserID)
-	assert.Equal(t, int64(13579), leaderboard.Standings[2].UserID)
-}
+	err = updateLeaderboard("2019")
+	assert.Nil(t, err)
 
-func createPicks() map[int64]pick {
-	return map[int64]pick{
-		7015: pick{
-			SelectionID: 23,
-			Status:      "PENDING",
-		},
-		7016: pick{
-			SelectionID: 21,
-			Status:      "PENDING",
-		},
-		7017: pick{
-			SelectionID: 2,
-			Status:      "PENDING",
-		},
-		7018: pick{
-			SelectionID: 1,
-			Status:      "PENDING",
-		},
-		7019: pick{
-			SelectionID: 27,
-			Status:      "PENDING",
-		},
-		7020: pick{
-			SelectionID: 7,
-			Status:      "PENDING",
-		},
-		7021: pick{
-			SelectionID: 38,
-			Status:      "PENDING",
-		},
-		7022: pick{
-			SelectionID: 17,
-			Status:      "PENDING",
-		},
-		7023: pick{
-			SelectionID: 11,
-			Status:      "PENDING",
-		},
-		7024: pick{
-			SelectionID: 25,
-			Status:      "PENDING",
-		},
-		7025: pick{
-			SelectionID: 40,
-			Status:      "PENDING",
-		},
-	}
+	board, err := findLeaderboardByID("2019")
+	assert.Nil(t, err)
 
+	assert.NotNil(t, board)
+	assert.Equal(t, "2019", board.ID)
+
+	assert.Equal(t, 2, len(board.Standings))
+	assert.Equal(t, int64(12345), board.Standings[0].UserID)
+	assert.Equal(t, int64(20), board.Standings[0].Score)
+
+	assert.Equal(t, int64(67890), board.Standings[1].UserID)
+	assert.Equal(t, int64(11), board.Standings[1].Score)
 }
