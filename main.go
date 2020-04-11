@@ -1,7 +1,10 @@
 package main
 
 import (
+	"flag"
 	"nba-pick-and-play/config"
+	clockPkg "nba-pick-and-play/pkg/clock"
+	"nba-pick-and-play/pkg/rapid"
 	"net/http"
 	"time"
 
@@ -11,46 +14,34 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
-type (
-	clock interface { // so we can mock this
-		now() time.Time
-	}
-
-	realClock struct{}
-)
-
-func (realClock) now() time.Time {
-	return time.Now()
-}
-
 var (
-	validate    *validator.Validate
-	clockClient clock
+	clock          clockPkg.Clock
+	rapidAPIClient rapid.Client
+	validate       *validator.Validate
 
 	log *logrus.Logger
 )
 
-func init() {
-	log = logrus.New()
-	config.LoadConfig("config/config_dev.toml")
-}
-
 func main() {
+	configPath := flag.String("config", "config/config_dev.toml", "location of the config to be used")
+	flag.Parse()
+
+	config.LoadConfig(*configPath)
+
+	log = logrus.New()
+
 	setupDatabase()
 
 	if config.Config.Rapid.Enabled {
 		c := cron.New()
-		c.AddFunc("0 9 * * *", dailyCron)
+		c.AddFunc("0 9 * * *", dailyCron) // 9am daily
 		c.Start()
 	}
 
 	// interface for the Rapid API requests
-	rapidAPIClient = baseRapidAPIClient{
-		baseURL: config.Config.Rapid.BaseURL,
-		apiKey:  config.Config.Rapid.APIKey,
-	}
+	rapidAPIClient = rapid.NewRapidAPIClient(config.Config.Rapid.BaseURL, config.Config.Rapid.APIKey)
 
-	clockClient = realClock{}
+	clock = clockPkg.NewClock()
 
 	validate = validator.New()
 
@@ -86,7 +77,7 @@ func initRouter(router *mux.Router) {
 	- create game day report for tonight's upcoming matches
 */
 func dailyCron() {
-	dateNow := clockClient.now()
+	dateNow := clock.Now()
 
 	dateToday := dateNow.Format(basicDateFormat)
 	dateYesterday := dateNow.Add(-24 * time.Hour).Format(basicDateFormat)

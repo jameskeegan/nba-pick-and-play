@@ -3,7 +3,7 @@ WIP Go backend project for web-based, competitive pick & play competition with w
 
 ## Current Functionality
 As of the 9th April '20, project has the capablility to
-* Poll a [public sports API for NBA matches](https://rapidapi.com/api-sports/api/api-nba) daily to get recent results and upcoming games
+* Poll a [public sports API for NBA matches](https://rapid.com/api-sports/api/api-nba) daily to get recent results and upcoming games
 * Allow users to make picks for the upcoming night of NBA games
 * Evaluate these picks daily when the data poll is done, with the user's score calculated from this
 * Provide PvP leaderboards, both for daily results and overall season results

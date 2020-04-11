@@ -1,6 +1,7 @@
 package main
 
 import (
+	"nba-pick-and-play/pkg/rapid"
 	"testing"
 	"time"
 
@@ -83,17 +84,19 @@ func TestEvaluateGameDayReportSuccess(t *testing.T) {
 		Picks:     createPicks(),
 		Evaluated: false,
 		Score:     0,
-		Date:      clockClient.now(),
+		Date:      clock.Now(),
 	}
 
 	err = upsertGameDayPicks(gameDayPicks)
 	assert.Nil(t, err)
 
 	// substitute the client again, this time for one with the results data
-	rapidAPIClient = mockRapidAPIClient{
-		eighteenthPath: "test/2020-01-18_nextday.json",
-		nineteenthPath: "test/2020-01-19_nextday.json",
+	matchesToFile := map[string]string{
+		"2020-01-18": "test/2020-01-18_nextday.json",
+		"2020-01-19": "test/2020-01-19_nextday.json",
 	}
+
+	rapidAPIClient = rapid.NewMockRapidClient(matchesToFile)
 
 	// undo this change for other tests
 	defer setDefaultMockRapidAPIClient()

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	clockPkg "nba-pick-and-play/pkg/clock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -75,9 +76,7 @@ func TestGetGameDayReportSuccessPreRollover(t *testing.T) {
 	_, err = createGameDayReport("2020-01-18")
 	assert.Nil(t, err)
 
-	clockClient = mockClock{ // 8:30am on the 19th Jan
-		date: time.Date(2020, time.January, 19, 8, 30, 0, 0, time.UTC),
-	}
+	clock = clockPkg.NewMockClock(time.Date(2020, time.January, 19, 8, 30, 0, 0, time.UTC))
 
 	defer setDefaultMockClock()
 
@@ -104,9 +103,8 @@ func TestGetGameDayReportSuccessPreRollover(t *testing.T) {
 func TestGetGameDayResultsReportSuccess(t *testing.T) {
 	defer cleanDatabase(t)
 
-	clockClient = mockClock{ // noon on the 19th Jan
-		date: time.Date(2020, time.January, 19, 12, 0, 0, 0, time.UTC),
-	}
+	// noon on the 19th Jan
+	clock = clockPkg.NewMockClock(time.Date(2020, time.January, 19, 12, 0, 0, 0, time.UTC))
 
 	defer setDefaultMockClock()
 
@@ -199,9 +197,7 @@ func TestMakePicksPastDeadline(t *testing.T) {
 	assert.Nil(t, err)
 
 	// missed deadline by half an hour (8:30pm is tip-off for first game)
-	clockClient = mockClock{
-		date: time.Date(2020, time.January, 18, 21, 0, 0, 0, time.UTC),
-	}
+	clock = clockPkg.NewMockClock(time.Date(2020, time.January, 18, 21, 0, 0, 0, time.UTC))
 
 	defer setDefaultMockClock()
 

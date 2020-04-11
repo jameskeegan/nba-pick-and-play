@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
 	"nba-pick-and-play/config"
+	clockPkg "nba-pick-and-play/pkg/clock"
+	"nba-pick-and-play/pkg/rapid"
 	"testing"
 	"time"
 
@@ -12,66 +12,18 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-type (
-	mockRapidAPIClient struct {
-		seventeenthPath string
-		eighteenthPath  string
-		nineteenthPath  string
-	}
-)
-
-// loads the file associated with a given select date
-func (c mockRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
-	var path string
-	switch date {
-	case "2020-01-17":
-		path = c.seventeenthPath
-	case "2020-01-18":
-		path = c.eighteenthPath
-	case "2020-01-19":
-		path = c.nineteenthPath
-	default: // unexpected behaviour
-		log.Fatalf("ERROR: no file found for date %s", date)
-	}
-
-	file, err := ioutil.ReadFile(path)
-
-	if err != nil {
-		log.Fatalf("Failed to load file %s - %s", path, err.Error())
-	}
-
-	var response rapidResponse
-	err = json.Unmarshal([]byte(file), &response)
-
-	if err != nil {
-		log.Fatalf("Failed to decode file %s - %s", path, err.Error())
-	}
-
-	return &response, nil
-}
-
 func setDefaultMockRapidAPIClient() {
-	rapidAPIClient = mockRapidAPIClient{
-		seventeenthPath: "test/2020-01-17.json",
-		eighteenthPath:  "test/2020-01-18.json",
-		nineteenthPath:  "test/2020-01-19.json",
+	matchesToFiles := map[string]string{
+		"2020-01-17": "test/2020-01-17.json",
+		"2020-01-18": "test/2020-01-18.json",
+		"2020-01-19": "test/2020-01-19.json",
 	}
-}
 
-type (
-	mockClock struct {
-		date time.Time
-	}
-)
-
-func (c mockClock) now() time.Time {
-	return c.date
+	rapidAPIClient = rapid.NewMockRapidClient(matchesToFiles)
 }
 
 func setDefaultMockClock() {
-	clockClient = mockClock{
-		date: time.Date(2020, time.January, 18, 12, 0, 0, 0, time.UTC),
-	}
+	clock = clockPkg.NewMockClock(time.Date(2020, time.January, 18, 12, 0, 0, 0, time.UTC))
 }
 
 func init() {

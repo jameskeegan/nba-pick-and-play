@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"nba-pick-and-play/config"
-	"nba-pick-and-play/response"
+	"nba-pick-and-play/pkg/response"
 	"net/http"
 	"time"
 
@@ -25,7 +25,7 @@ func getGameDayReport(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
 	if date == "" { // get date as the current date
-		date = getCurrentGameDay(clockClient.now())
+		date = getCurrentGameDay(clock.Now())
 	}
 
 	gameDayReport, err := findGameDayReportByID(date)
@@ -48,7 +48,7 @@ func getGameDayResultsReport(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
 	if date == "" { // defaults to yesterday's results
-		date = getCurrentGameDay(clockClient.now().Add(-24 * time.Hour))
+		date = getCurrentGameDay(clock.Now().Add(-24 * time.Hour))
 	}
 
 	resultsReport, err := findGameDayResultsReportByID(date)
@@ -113,7 +113,7 @@ func makePicks(w http.ResponseWriter, r *http.Request) {
 		SeasonID:  config.Config.Rapid.Season,
 		Picks:     picks,
 		Evaluated: false,
-		Date:      clockClient.now(),
+		Date:      clock.Now(),
 	}
 
 	err = upsertGameDayPicks(gameDayPicks)

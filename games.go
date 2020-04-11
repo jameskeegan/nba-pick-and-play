@@ -1,102 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"nba-pick-and-play/pkg/rapid"
 	"strconv"
 	"time"
 )
 
-type (
-	// response format for the rapid NBA API response
-	rapidResponse struct {
-		ResponseWrapper rapidResponseWrapper `json:"API"`
-	}
-
-	rapidResponseWrapper struct {
-		Status  int         `json:"status"`
-		Message string      `json:"message"`
-		Results int         `json:"results"`
-		Filters []string    `json:"filters"`
-		Games   []rapidGame `json:"games"`
-	}
-
-	rapidGame struct {
-		SeasonYear      string    `json:"seasonYear"`
-		League          string    `json:"league"`
-		GameID          string    `json:"gameId"`
-		StartTimeUTC    time.Time `json:"startTimeUTC"`
-		EndTimeUTC      string    `json:"endTimeUTC"`
-		Arena           string    `json:"arena"`
-		City            string    `json:"city"`
-		Country         string    `json:"country"`
-		Clock           string    `json:"clock"`
-		GameDuration    string    `json:"gameDuration"`
-		CurrentPeriod   string    `json:"currentPeriod"`
-		Halftime        string    `json:"halftime"`
-		EndOfPeriod     string    `json:"EndOfPeriod"`
-		SeasonStage     string    `json:"seasonStage"`
-		StatusShortGame string    `json:"statusShortGame"`
-		StatusGame      string    `json:"statusGame"`
-		VTeam           rapidTeam `json:"vTeam"`
-		HTeam           rapidTeam `json:"hTeam"`
-	}
-
-	rapidTeam struct {
-		TeamID    string     `json:"teamId"`
-		ShortName string     `json:"shortName"`
-		FullName  string     `json:"fullName"`
-		NickName  string     `json:"nickName"`
-		Logo      string     `json:"logo"`
-		Score     rapidScore `json:"score"`
-	}
-
-	rapidScore struct {
-		Points string `json:"points"`
-	}
-
-	// interface so that we can substitute in a mock for testing
-	rapidAPIInterface interface {
-		getMatchesByDateRequest(date string) (*rapidResponse, error)
-	}
-
-	baseRapidAPIClient struct {
-		baseURL string
-		apiKey  string
-	}
-)
-
-func (c baseRapidAPIClient) getMatchesByDateRequest(date string) (*rapidResponse, error) {
-	client := http.Client{}
-	req, err := http.NewRequest("GET", c.baseURL+date, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("x-rapidapi-key", c.apiKey)
-
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	var response rapidResponse
-	json.NewDecoder(resp.Body).Decode(&response)
-
-	return &response, nil
-}
-
 const (
 	statusFinished = "Finished"
-)
-
-var (
-	rapidAPIClient rapidAPIInterface
 )
 
 /*
@@ -106,10 +18,10 @@ var (
 	is in UTC, meaning some games are before midnight (so on the correct game day) and some are after midnight (the day after the correct game day)
 */
 func pollGames(dates ...string) error {
-	log.Printf("Polling games for date(s) %v...", dates)
+	log.Printf("Polling games for game date(s) %v...", dates)
 
 	for _, date := range dates {
-		err := saveMatchDay(date)
+		err := pollGameDay(date)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -117,12 +29,12 @@ func pollGames(dates ...string) error {
 		}
 	}
 
-	log.Printf("Successful poll for date(s) %v...", dates)
+	log.Printf("Successful poll for game date(s) %v...", dates)
 	return nil
 }
 
-func saveMatchDay(date string) error {
-	res, err := rapidAPIClient.getMatchesByDateRequest(date)
+func pollGameDay(date string) error {
+	res, err := rapidAPIClient.GetMatchesByDateRequest(date)
 
 	if err != nil {
 		return fmt.Errorf("could not evaluate matches for date %s: %s", date, err.Error())
@@ -145,7 +57,7 @@ func saveMatchDay(date string) error {
 	return nil
 }
 
-func rapidGameToGame(rapidGame rapidGame) (*game, error) {
+func rapidGameToGame(rapidGame rapid.NBAGame) (*game, error) {
 	matchID, err := strconv.ParseInt(rapidGame.GameID, 10, 64)
 
 	if err != nil {
@@ -196,7 +108,7 @@ func rapidGameToGame(rapidGame rapidGame) (*game, error) {
 	return game, nil
 }
 
-func rapidTeamToTeam(rapidTeam rapidTeam, status string) (*team, error) {
+func rapidTeamToTeam(rapidTeam rapid.NBATeam, status string) (*team, error) {
 	id, err := strconv.ParseInt(rapidTeam.TeamID, 10, 64)
 
 	if err != nil {

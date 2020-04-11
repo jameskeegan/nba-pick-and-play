@@ -49,7 +49,7 @@ func verifyPicks(gameDate string, userPicks map[int64]int64) (map[int64]pick, er
 		return nil, err
 	}
 
-	if report.Deadline.Before(clockClient.now()) {
+	if report.Deadline.Before(clock.Now()) {
 		return nil, fmt.Errorf("missed deadline: %v", report.Deadline) // TODO: turn into error struct?
 	}
 
